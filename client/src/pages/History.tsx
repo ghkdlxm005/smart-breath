@@ -114,13 +114,13 @@ export default function History() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['sessions', 'list', page],
-    queryFn: () => sessionsApi.list({ page, per_page: 20 } as any),
+    queryFn: () => sessionsApi.list({ page, per_page: 20 }),
   })
 
   // 캘린더용 전체 목록 (최근 90일)
   const { data: allData } = useQuery({
     queryKey: ['sessions', 'all'],
-    queryFn: () => sessionsApi.list({ per_page: 200 } as any),
+    queryFn: () => sessionsApi.list({ per_page: 200 }),
     enabled: viewMode === 'calendar',
   })
 

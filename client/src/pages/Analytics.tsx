@@ -6,8 +6,8 @@ import TrendChart from '@/components/charts/TrendChart'
 import RadarChart from '@/components/charts/RadarChart'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import EmptyState from '@/components/ui/EmptyState'
-import { BarChart3, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
-import { Activity } from 'lucide-react'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { BarChart3, Activity } from 'lucide-react'
 
 type Period = '7d' | '30d' | '90d' | '180d'
 
@@ -68,18 +68,20 @@ export default function Analytics() {
           </div>
 
           {/* 백분위 */}
-          <div className="card p-5 flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shrink-0">
-              <span className="text-white font-bold text-xl">{data.percentile}</span>
+          {data.percentile != null && (
+            <div className="card p-5 flex items-center gap-5">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shrink-0">
+                <span className="text-white font-bold text-xl">{data.percentile}</span>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">그룹 내 백분위</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-white">
+                  상위 <span className="text-primary-500">{100 - data.percentile}%</span>
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">같은 연령·성별 그룹 대비</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-slate-500">그룹 내 백분위</p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">
-                상위 <span className="text-primary-500">{100 - data.percentile}%</span>
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">같은 연령·성별 그룹 대비</p>
-            </div>
-          </div>
+          )}
 
           {/* 차트 그리드 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

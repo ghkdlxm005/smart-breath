@@ -90,8 +90,8 @@ export default function Training() {
     if (!sessionId) return
     setIsEnding(true)
     try {
-      emitEnd()
-      // REST 방식으로도 종료 처리
+      // REST API로만 종료 — Socket.IO emitEnd() 를 동시에 쓰면
+      // 서버가 세션을 먼저 종료해서 REST 호출 시 400이 반환되는 이중 종료 버그 발생
       const result = await sessionsApi.end(sessionId)
       reset()
       navigate(`/training/result/${result.session.id}`)

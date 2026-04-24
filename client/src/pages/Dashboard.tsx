@@ -29,7 +29,7 @@ export default function Dashboard() {
 
   const { data: recentSessions } = useQuery({
     queryKey: ['sessions', 'recent'],
-    queryFn: () => sessionsApi.list({ per_page: 5 } as any),
+    queryFn: () => sessionsApi.list({ per_page: 5 }),
   })
 
   const { data: devicesData } = useQuery({

@@ -48,18 +48,31 @@ export default function TrainingResult() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const sessionId = Number(id)
+  const isValidId = !isNaN(sessionId) && sessionId > 0
 
   const { data: sessionData, isLoading } = useQuery({
     queryKey: ['session', sessionId],
     queryFn: () => sessionsApi.get(sessionId),
-    enabled: !!sessionId,
+    enabled: isValidId,
   })
 
   const { data: samplesData } = useQuery({
     queryKey: ['session-samples', sessionId],
     queryFn: () => sessionsApi.samples(sessionId, 1000),
-    enabled: !!sessionId,
+    enabled: isValidId,
   })
+
+  // 잘못된 ID면 바로 대시보드로
+  if (!isValidId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-slate-400">유효하지 않은 세션입니다.</p>
+        <button onClick={() => navigate('/dashboard')} className="btn-secondary text-sm px-4 py-2">
+          홈으로
+        </button>
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (
