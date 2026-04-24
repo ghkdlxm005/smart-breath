@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# DB는 실행 위치(CWD) 기준 — 한글/공백 경로 문제 방지
+_DB_PATH = os.path.join(BASE_DIR, "smart_breath.db")
 
 
 class Config:
@@ -13,7 +15,7 @@ class Config:
     # SQLite DB 경로
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL",
-        f"sqlite:///{os.path.join(BASE_DIR, 'db', 'smart_breath.db')}"
+        f"sqlite:///{_DB_PATH}"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False

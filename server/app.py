@@ -17,6 +17,14 @@ def create_app(env: str = "default") -> Flask:
     app = Flask(__name__)
     app.config.from_object(config[env])
 
+    # DB 디렉토리 자동 생성 (sqlite 파일 경로의 부모 폴더)
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if db_uri.startswith("sqlite:///"):
+        db_path = db_uri[len("sqlite:///"):]
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+
     # ─── 확장 초기화 ───
     db.init_app(app)
     CORS(app, supports_credentials=True, origins="*")
