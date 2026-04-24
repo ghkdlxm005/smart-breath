@@ -1,0 +1,59 @@
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# 가상환경
+venv/
+.venv/
+env/
+
+# 환경변수
+.env
+.env.*
+!.env.example
+
+# DB 파일
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# ─── Node / React ───
+node_modules/
+dist/
+.pnp
+.pnp.js
+
+# 빌드 아웃풋
+client/dist/
+client/build/
+
+# 캐시
+.eslintcache
+.vite/
+*.local
+
+# ─── IDE / OS ───
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── 로그 ───
+*.log
+logs/
+npm-debug.log*
+
+# ─── 테스트 / 커버리지 ───
+coverage/
+.pytest_cache/
+htmlcov/

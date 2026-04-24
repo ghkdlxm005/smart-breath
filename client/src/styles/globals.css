@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: #0EA5E9;
+    --color-secondary: #06B6D4;
+    --color-accent: #22C55E;
+    --color-warning: #F59E0B;
+    --color-danger: #EF4444;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Pretendard Variable', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 스크롤바 스타일 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 dark:bg-slate-600 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400 dark:bg-slate-500;
+  }
+}
+
+@layer components {
+  /* 카드 기본 스타일 */
+  .card {
+    @apply bg-white dark:bg-slate-900 rounded-2xl border border-slate-100
+           dark:border-slate-800 shadow-card;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+
+  /* 버튼 기본 */
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 active:bg-primary-700
+           text-white font-semibold px-6 py-3 rounded-xl
+           transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700
+           text-slate-700 dark:text-slate-200 font-semibold px-6 py-3 rounded-xl
+           transition-all duration-150;
+  }
+
+  /* 입력 필드 */
+  .input-field {
+    @apply w-full bg-slate-50 dark:bg-slate-800 border border-slate-200
+           dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900
+           dark:text-slate-100 placeholder-slate-400 focus:outline-none
+           focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           transition-all duration-150;
+  }
+
+  /* 배지 — @apply 안에서는 dark: 변형 사용 불가, CSS 변수로 처리 */
+  .badge-success {
+    @apply inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full;
+    background-color: rgba(34, 197, 94, 0.1);
+    color: #16a34a;
+  }
+  .dark .badge-success { color: #4ade80; }
+
+  .badge-warning {
+    @apply inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full;
+    background-color: rgba(245, 158, 11, 0.1);
+    color: #F59E0B;
+  }
+
+  .badge-danger {
+    @apply inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full;
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #EF4444;
+  }
+
+  .badge-info {
+    @apply inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full;
+    background-color: rgba(14, 165, 233, 0.1);
+    color: #0284c7;
+  }
+  .dark .badge-info { color: #38bdf8; }
+}
+
+@layer utilities {
+  /* 숫자 폰트 변형 */
+  .font-numeric {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* 그라데이션 텍스트 */
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent;
+  }
+
+  /* 글로우 이펙트 */
+  .glow-blue {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.4), 0 0 40px rgba(14, 165, 233, 0.2);
+  }
+  .glow-green {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+  }
+}

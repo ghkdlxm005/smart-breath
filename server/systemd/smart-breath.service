@@ -1,0 +1,16 @@
+[Unit]
+Description=Smart Breath Training Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/smart-breath/server
+Environment=FLASK_ENV=production
+EnvironmentFile=/home/pi/smart-breath/server/.env
+ExecStart=/home/pi/smart-breath/venv/bin/python app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
