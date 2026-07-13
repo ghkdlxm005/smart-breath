@@ -48,36 +48,10 @@ def end_session(session_id: int):
     if session.ended_at:
         return jsonify({"error": "이미 종료된 세션입니다."}), 400
 
-    # DB에 저장된 샘플로 점수 계산
-    from services.score_engine import calculate_score, compute_session_stats
-    from config import Config
+    # 점수 계산은 Socket.IO 종료 경로와 동일한 단일 진입점 사용 (항상 DB 샘플 기준)
+    from services.session_service import finalize_session
+    finalize_session(session)
 
-    samples_qs = (
-        MeasurementSample.query
-        .filter_by(session_id=session_id)
-        .order_by(MeasurementSample.ts_ms.asc())
-        .all()
-    )
-    dp_values = [s.dp_pa for s in samples_qs]
-
-    session.ended_at = datetime.utcnow()
-
-    if dp_values and session.level:
-        level_config = Config.SERVO_LEVEL_CONFIG.get(session.level, {})
-        score, _ = calculate_score(
-            dp_values,
-            level_config.get("min_pa", 100),
-            level_config.get("max_pa", 500),
-            session.target_cycles or 30,
-        )
-        stats = compute_session_stats(dp_values)
-        session.score = score
-        session.total_cycles = stats.get("total_cycles", 0)
-        session.avg_peak_pressure = stats.get("avg_peak_pressure", 0)
-        session.max_pressure = stats.get("max_pressure", 0)
-        session.min_pressure = stats.get("min_pressure", 0)
-
-    db.session.commit()
     return jsonify({"session": session.to_dict()})
 
 

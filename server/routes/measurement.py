@@ -3,6 +3,7 @@
 - POST /api/measurement : 배치 업로드
 - GET  /api/device/{device_id}/command : 서보 제어 명령 폴링
 """
+import secrets
 import time
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
@@ -14,13 +15,26 @@ from services.score_engine import classify_phase
 measurement_bp = Blueprint("measurement", __name__, url_prefix="/api")
 
 
-def _verify_device_token() -> bool:
-    """ESP32 장치 토큰 검증 (Authorization: Bearer <token>)"""
+def _extract_bearer() -> str:
+    """Authorization: Bearer <token> 에서 토큰만 추출."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
+        return ""
+    return auth_header[7:]
+
+
+def _verify_device(device) -> bool:
+    """
+    해당 기기의 개별 토큰으로 검증.
+    기기에 토큰이 설정돼 있지 않은 경우에만(레거시/데모) 전역 DEVICE_TOKEN 을 폴백 허용.
+    """
+    token = _extract_bearer()
+    if not token:
         return False
-    token = auth_header[7:]
-    return token == current_app.config.get("DEVICE_TOKEN", "")
+    if device is not None and device.auth_token:
+        return secrets.compare_digest(token, device.auth_token)
+    # 폴백: 기기 토큰 미설정 시 전역 토큰 (개발/데모 편의)
+    return secrets.compare_digest(token, current_app.config.get("DEVICE_TOKEN", ""))
 
 
 @measurement_bp.route("/measurement", methods=["POST"])
@@ -38,9 +52,6 @@ def upload_measurement():
       ]
     }
     """
-    if not _verify_device_token():
-        return jsonify({"error": "장치 인증 실패"}), 401
-
     data = request.get_json(silent=True) or {}
     device_id_str = data.get("device_id")
     samples_raw = data.get("samples", [])
@@ -48,10 +59,13 @@ def upload_measurement():
     if not device_id_str or not samples_raw:
         return jsonify({"error": "device_id 와 samples 필드가 필요합니다."}), 400
 
-    # 기기 조회 및 마지막 통신 갱신
+    # 기기 조회 후 해당 기기 토큰으로 인증
     device = Device.query.filter_by(device_id=device_id_str).first()
     if not device:
         return jsonify({"error": f"등록되지 않은 기기: {device_id_str}"}), 404
+
+    if not _verify_device(device):
+        return jsonify({"error": "장치 인증 실패"}), 401
 
     device.update_last_seen()
     if data.get("battery_percent") is not None:
@@ -105,12 +119,12 @@ def get_device_command(device_id: str):
     서보 제어 명령 폴링 (ESP32 → 서버, 1초 주기)
     Response: { "cmd": "set_level", "level": 3, "servo_inhale_deg": 90, ... }
     """
-    if not _verify_device_token():
-        return jsonify({"error": "장치 인증 실패"}), 401
-
     device = Device.query.filter_by(device_id=device_id).first()
     if not device:
         return jsonify({"error": "등록되지 않은 기기"}), 404
+
+    if not _verify_device(device):
+        return jsonify({"error": "장치 인증 실패"}), 401
 
     device.update_last_seen()
     db.session.commit()

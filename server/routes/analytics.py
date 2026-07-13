@@ -73,6 +73,8 @@ def analytics_summary():
     # ─── 전체 통계 ───
     scores = [s.score for s in sessions if s.score is not None]
     pressures = [s.avg_peak_pressure for s in sessions if s.avg_peak_pressure is not None]
+    # 호기력: 세션별 최저 차압(가장 깊은 날숨)의 크기 — 흡기와 별개의 실측값
+    exhale_mags = [abs(s.min_pressure) for s in sessions if s.min_pressure is not None]
     durations = [s.duration_seconds() for s in sessions if s.ended_at]
 
     total_cycles_all = sum(s.total_cycles or 0 for s in sessions)
@@ -85,7 +87,7 @@ def analytics_summary():
 
     radar = {
         "inhale_power": normalize(float(np.mean(pressures)) if pressures else 0, 0, 500),
-        "exhale_power": normalize(float(np.mean(pressures)) if pressures else 0, 0, 400),
+        "exhale_power": normalize(float(np.mean(exhale_mags)) if exhale_mags else 0, 0, 400),
         "endurance": normalize(float(np.mean(durations)) if durations else 0, 0, 1800),
         "stability": normalize(float(np.std(scores)) if len(scores) > 1 else 0, 50, 0),  # 역수
         "rhythm": normalize(total_cycles_all / max(len(sessions), 1), 0, 60),
@@ -102,9 +104,11 @@ def analytics_summary():
         for k, v in sorted(weekly_freq.items())
     ]
 
-    # 백분위 (더미 — 실사용 시 전체 유저 통계로 대체)
+    # 백분위: 현재는 평균 점수를 근사값으로 사용 (전체 유저 분포 집계 전까지의 추정치).
+    # is_estimated 플래그로 UI 에서 "추정" 표기가 가능하도록 노출.
     avg_score = float(np.mean(scores)) if scores else 0
     percentile = min(99, max(1, int(avg_score)))
+    percentile_estimated = True
 
     return jsonify({
         "period": period_str,
@@ -113,6 +117,7 @@ def analytics_summary():
         "avg_peak_pressure": round(float(np.mean(pressures)) if pressures else 0, 1),
         "total_training_min": round(sum(durations) / 60, 1) if durations else 0,
         "percentile": percentile,
+        "percentile_estimated": percentile_estimated,
         "trend": trend,
         "radar": radar,
         "weekly_chart": weekly_chart,

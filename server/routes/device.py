@@ -26,26 +26,43 @@ def list_devices():
 @device_bp.route("/pair", methods=["POST"])
 @login_required
 def pair_device():
-    """새 기기 페어링"""
+    """
+    새 기기 페어링.
+    - 미등록 기기: 새로 등록하고 기기 전용 토큰을 1회 발급.
+    - 내 기기: 그대로 반환 (필요 시 토큰 재발급 옵션).
+    - 다른 사용자 기기: 소유권 무단 이전 금지 (403).
+    발급된 auth_token 은 이 응답에서만 노출되며, ESP32 펌웨어에 저장해 사용한다.
+    """
     data = request.get_json(silent=True) or {}
     device_id_str = data.get("device_id", "").strip()
 
     if not device_id_str:
         return jsonify({"error": "device_id가 필요합니다."}), 400
 
-    # 이미 등록된 기기인지 확인 — 다른 사용자 기기도 소유권 이전 허용
     existing = Device.query.filter_by(device_id=device_id_str).first()
     if existing:
-        if existing.user_id == current_user.id:
-            return jsonify({"message": "이미 등록된 기기입니다.", "device": existing.to_dict()})
-        # 소유권을 현재 사용자로 이전
-        existing.user_id = current_user.id
-        db.session.commit()
-        return jsonify({"message": "기기 페어링 완료 (소유권 이전)", "device": existing.to_dict()})
+        if existing.user_id and existing.user_id != current_user.id:
+            # 이미 다른 사용자가 소유 중 — 탈취 방지
+            return jsonify({"error": "이미 다른 계정에 등록된 기기입니다."}), 403
 
+        # 미소유(user_id=None) 기기이거나 내 기기 → 연결/재확인
+        existing.user_id = current_user.id
+        rotate = bool(data.get("rotate_token"))
+        token = None
+        if rotate or not existing.auth_token:
+            token = Device.generate_token()
+            existing.auth_token = token
+        db.session.commit()
+        resp = {"message": "기기 페어링 완료", "device": existing.to_dict()}
+        if token:
+            resp["auth_token"] = token  # 1회성 노출
+        return jsonify(resp)
+
+    token = Device.generate_token()
     device = Device(
         device_id=device_id_str,
         user_id=current_user.id,
+        auth_token=token,
         mac_address=data.get("mac_address"),
         firmware_version=data.get("firmware_version"),
         current_level=1,
@@ -53,7 +70,11 @@ def pair_device():
     db.session.add(device)
     db.session.commit()
 
-    return jsonify({"message": "기기 페어링 완료", "device": device.to_dict()}), 201
+    return jsonify({
+        "message": "기기 페어링 완료",
+        "device": device.to_dict(),
+        "auth_token": token,  # 1회성 노출 — ESP32 에 저장할 것
+    }), 201
 
 
 @device_bp.route("/<int:device_db_id>/test", methods=["POST"])

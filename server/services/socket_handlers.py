@@ -1,42 +1,47 @@
 """
 Flask-SocketIO 이벤트 핸들러
 클라이언트 ↔ 서버 실시간 통신
+
+변경점:
+- 세션 종료·점수 계산은 services.session_service.finalize_session 하나로 통일
+  (점수는 항상 DB 원본 샘플 기준).
+- 소켓 연결 해제(새로고침·모바일 백그라운드) 시 세션을 강제 종료하지 않는다.
+  대신 새 세션 시작 시 이전 열린 세션을 정리한다.
 """
 from datetime import datetime
 from flask import request
 from flask_login import current_user
-from flask_socketio import emit, join_room, leave_room
+from flask_socketio import emit, join_room
 
 from extensions import socketio, db
 from models import TrainingSession, Device
-from config import Config
-from services.score_engine import calculate_score, classify_phase, compute_session_stats
+from services.score_engine import classify_phase
+from services.session_service import finalize_session, close_stale_open_sessions
 
 
-# 현재 진행 중인 세션 캐시 {sid: session_id}
+# 현재 진행 중인 세션 캐시 {sid: session_id} — 라이브 브로드캐스트 라우팅용
 active_sessions: dict = {}
-# 실시간 샘플 버퍼 {session_id: [dp_pa, ...]}
-sample_buffer: dict = {}
 
 
 @socketio.on("connect")
 def handle_connect():
     """클라이언트 연결"""
     print(f"[Socket.IO] 클라이언트 연결: {request.sid}")
+    # 인증된 사용자는 즉시 개인 룸에 입장시켜 새로고침 후에도 measurement 를 수신
+    if getattr(current_user, "is_authenticated", False):
+        join_room(f"user_{current_user.id}")
     emit("connected", {"status": "ok", "sid": request.sid})
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    """클라이언트 연결 해제 — 진행 중 세션 자동 종료"""
-    sid = request.sid
-    if sid in active_sessions:
-        session_id = active_sessions.pop(sid)
-        _finalize_session(session_id)
-        print(f"[Socket.IO] 세션 {session_id} 자동 종료 (연결 해제)")
-    if sid in sample_buffer:
-        del sample_buffer[sid]
-    print(f"[Socket.IO] 클라이언트 연결 해제: {sid}")
+    """
+    클라이언트 연결 해제 — 세션을 강제 종료하지 않는다.
+    (새로고침/일시적 네트워크 끊김으로 훈련이 조기 종료되던 문제 제거)
+    세션은 명시적 end 또는 다음 세션 시작 시 정리된다.
+    """
+    active_sessions.pop(request.sid, None)
+    print(f"[Socket.IO] 클라이언트 연결 해제: {request.sid}")
 
 
 @socketio.on("start_session")
@@ -45,7 +50,7 @@ def handle_start_session(data: dict):
     훈련 세션 시작
     data: { "level": int, "target_cycles": int (optional) }
     """
-    if not current_user.is_authenticated:
+    if not getattr(current_user, "is_authenticated", False):
         emit("error", {"msg": "로그인이 필요합니다."})
         return
 
@@ -53,11 +58,12 @@ def handle_start_session(data: dict):
     target_cycles = int(data.get("target_cycles", 30))
     user_id = current_user.id
 
-    # 기기 조회
+    # 방치된 이전 세션 정리 (연결 해제로 남아있던 open 세션)
+    close_stale_open_sessions(user_id)
+
     device = Device.query.filter_by(user_id=user_id).first()
     device_db_id = device.id if device else None
 
-    # 새 세션 생성
     session = TrainingSession(
         user_id=user_id,
         device_id=device_db_id,
@@ -69,9 +75,6 @@ def handle_start_session(data: dict):
     db.session.commit()
 
     active_sessions[request.sid] = session.id
-    sample_buffer[session.id] = []
-
-    # 사용자 전용 룸 입장 (멀티 탭 지원)
     join_room(f"user_{user_id}")
 
     emit("session_started", {
@@ -85,22 +88,33 @@ def handle_start_session(data: dict):
 
 @socketio.on("end_session")
 def handle_end_session(_data=None):
-    """
-    훈련 세션 종료 — 최종 점수 계산 후 결과 emit
-    """
+    """훈련 세션 종료 — 최종 점수 계산 후 결과 emit"""
+    if not getattr(current_user, "is_authenticated", False):
+        emit("error", {"msg": "로그인이 필요합니다."})
+        return
+
     sid = request.sid
-    if sid not in active_sessions:
+    session_id = active_sessions.pop(sid, None)
+
+    if session_id is None:
+        # 소켓 매핑이 없더라도 사용자의 열린 세션을 종료 (새로고침 후 종료 대응)
+        session = (
+            TrainingSession.query
+            .filter_by(user_id=current_user.id)
+            .filter(TrainingSession.ended_at.is_(None))
+            .order_by(TrainingSession.started_at.desc())
+            .first()
+        )
+    else:
+        session = db.session.get(TrainingSession, session_id)
+
+    if session is None or session.user_id != current_user.id:
         emit("error", {"msg": "진행 중인 세션이 없습니다."})
         return
 
-    session_id = active_sessions.pop(sid)
-    result = _finalize_session(session_id)
-
-    emit("session_ended", {
-        "session_id": session_id,
-        "result": result,
-    })
-    print(f"[Socket.IO] 세션 종료: session_id={session_id}, score={result.get('score')}")
+    result = finalize_session(session)
+    emit("session_ended", {"session_id": session.id, "result": result})
+    print(f"[Socket.IO] 세션 종료: session_id={session.id}, score={result.get('score')}")
 
 
 def broadcast_measurement(user_id: int, session_id: int, dp_pa: float, ts_ms: int):
@@ -108,85 +122,13 @@ def broadcast_measurement(user_id: int, session_id: int, dp_pa: float, ts_ms: in
     ESP32로부터 받은 측정값을 해당 사용자 클라이언트에 실시간 push
     (routes/measurement.py 에서 호출)
     """
-    phase = classify_phase(dp_pa)
-
-    # 샘플 버퍼에 적재
-    if session_id in sample_buffer:
-        sample_buffer[session_id].append(dp_pa)
-        # 30초 슬라이딩 윈도우 유지 (100Hz × 30s = 3000개)
-        if len(sample_buffer[session_id]) > 3000:
-            sample_buffer[session_id] = sample_buffer[session_id][-3000:]
-
     socketio.emit(
         "measurement",
         {
             "ts_ms": ts_ms,
             "dp_pa": round(dp_pa, 1),
-            "phase": phase,
+            "phase": classify_phase(dp_pa),
             "session_id": session_id,
         },
         room=f"user_{user_id}",
     )
-
-
-def _finalize_session(session_id: int) -> dict:
-    """세션을 종료하고 점수를 계산하여 DB에 저장"""
-    session = db.session.get(TrainingSession, session_id)
-    if not session:
-        return {}
-
-    session.ended_at = datetime.utcnow()
-
-    # 샘플 버퍼에서 점수 계산
-    samples = sample_buffer.pop(session_id, [])
-
-    if samples and session.level:
-        level_config = Config.SERVO_LEVEL_CONFIG.get(session.level, {})
-        min_pa = level_config.get("min_pa", 100)
-        max_pa = level_config.get("max_pa", 500)
-
-        score, detail = calculate_score(
-            samples, min_pa, max_pa,
-            target_cycles=session.target_cycles or 30
-        )
-        stats = compute_session_stats(samples)
-
-        session.score = score
-        session.total_cycles = stats.get("total_cycles", 0)
-        session.avg_peak_pressure = stats.get("avg_peak_pressure", 0)
-        session.max_pressure = stats.get("max_pressure", 0)
-        session.min_pressure = stats.get("min_pressure", 0)
-    else:
-        # DB에 저장된 샘플로 재계산
-        from models import MeasurementSample
-        db_samples = (
-            MeasurementSample.query
-            .filter_by(session_id=session_id)
-            .order_by(MeasurementSample.ts_ms.asc())
-            .all()
-        )
-        if db_samples and session.level:
-            dp_values = [s.dp_pa for s in db_samples]
-            level_config = Config.SERVO_LEVEL_CONFIG.get(session.level, {})
-            score, _ = calculate_score(
-                dp_values,
-                level_config.get("min_pa", 100),
-                level_config.get("max_pa", 500),
-                session.target_cycles or 30
-            )
-            stats = compute_session_stats(dp_values)
-            session.score = score
-            session.total_cycles = stats.get("total_cycles", 0)
-            session.avg_peak_pressure = stats.get("avg_peak_pressure", 0)
-            session.max_pressure = stats.get("max_pressure", 0)
-            session.min_pressure = stats.get("min_pressure", 0)
-
-    db.session.commit()
-
-    return {
-        "session_id": session_id,
-        "score": session.score,
-        "total_cycles": session.total_cycles,
-        "avg_peak_pressure": session.avg_peak_pressure,
-        "duration_seconds": session.duration_seconds(),
-    }
