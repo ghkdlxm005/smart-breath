@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/venv
+**/__pycache__
+**/*.pyc
+**/.env
+**/smart_breath.db
+**/db/*.db
+.git

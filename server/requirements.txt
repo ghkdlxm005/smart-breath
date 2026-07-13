@@ -11,3 +11,9 @@ pandas==2.2.3
 scikit-learn==1.5.2
 python-engineio==4.9.1
 python-socketio==5.11.2
+requests==2.32.3
+# ─── 배포용 (WSGI + WebSocket) ───
+gunicorn==22.0.0
+eventlet==0.36.1
+# ─── Postgres 사용 시 (DATABASE_URL=postgresql://...) 주석 해제 ───
+# psycopg2-binary==2.9.9

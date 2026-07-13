@@ -1,0 +1,33 @@
+# Render(무료 웹서비스) 배포용 Blueprint.
+# 이 파일이 있으면 Render 대시보드에서 "New +" → "Blueprint" 로 repo 를 연결해
+# 클릭 몇 번으로 배포된다. Docker 환경이라 프론트/백엔드가 한 서비스로 뜬다.
+#
+# 무료 플랜 주의: 15분 유휴 시 슬립 → 첫 요청에 콜드스타트(수십 초).
+# SQLite 는 재배포 시 디스크가 초기화되므로 데이터 영속이 필요하면
+# Neon/Supabase 무료 Postgres 를 만들어 DATABASE_URL 에 넣을 것.
+services:
+  - type: web
+    name: smart-breath
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SOCKETIO_ASYNC_MODE
+        value: eventlet
+      - key: SECRET_KEY
+        generateValue: true          # Render 가 안전한 랜덤값 자동 생성
+      - key: DEVICE_TOKEN
+        sync: false                  # 대시보드에서 직접 입력 (기기 폴백 토큰)
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      # same-origin 배포이므로 CORS_ORIGINS 는 기본값으로 충분.
+      # 프론트를 별도 도메인에 올린다면 아래를 그 도메인으로 설정하고
+      # SESSION_COOKIE_SAMESITE=None 을 추가할 것.
+      # - key: CORS_ORIGINS
+      #   value: https://your-frontend.example.com
+      # Postgres 사용 시 (권장):
+      # - key: DATABASE_URL
+      #   sync: false
